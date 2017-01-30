@@ -1,0 +1,94 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+emails=read.csv("energy_bids.csv",stringsAsFactors = FALSE)
+str(emails)
+```
+```{r}
+emails$email[1]
+```
+```{r}
+strwrap(emails$email[1])
+```
+```{r}
+table(emails$responsive)
+```
+## preprossessing data
+```{r}
+library(tm)
+corpus=Corpus(VectorSource(emails$email))
+strwrap(corpus[[1]])
+```
+```{r}
+corpus=tm_map(corpus,tolower)
+corpus = tm_map(corpus, PlainTextDocument)
+corpus=tm_map(corpus,removePunctuation)
+corpus=tm_map(corpus,removeWords,stopwords("english"))
+corpus=tm_map(corpus,stemDocument)
+corpus[[1]]$content
+```
+## making a document term matrix
+```{r}
+dtm=DocumentTermMatrix(corpus)
+dtm
+```
+```{r}
+dtm=removeSparseTerms(dtm,0.97)
+labeledterms=as.data.frame(as.matrix(dtm))
+labeledterms$responsive=emails$responsive
+str(labeledterms)
+```
+## splitting data
+```{r}
+library(caTools)
+set.seed(144)
+split=sample.split(labeledterms$responsive,SplitRatio = 0.70)
+train=subset(labeledterms,split==TRUE)
+test=subset(labeledterms,split==FALSE)
+library(rpart)
+
+```
+## building the model 
+```{r}
+library(rpart.plot)
+emailcart=rpart(responsive~.,data=train,method="class")
+prp(emailcart)
+
+```
+```{r}
+predictemailcart=predict(emailcart,newdata = test)
+pred.prob=predictemailcart[,2]
+table(test$responsive,pred.prob>0.5)
+```
+```{r}
+(195+25)/nrow(test)
+```
+```{r}
+library(ROCR)
+predrocr=prediction(pred.prob,test$responsive)
+prefROCR=performance(predrocr,"tpr","fpr")
+plot(prefROCR,colorize=TRUE)
+```
+

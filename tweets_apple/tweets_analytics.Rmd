@@ -1,0 +1,113 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+tweets=read.csv("tweets.csv",stringsAsFactors = FALSE)
+str(tweets)
+```
+## marking tweets as negative or positive
+```{r}
+tweets$negative=as.factor(tweets$Avg<=-1)
+table(tweets$negative)
+```
+## data pre-processing
+```{r}
+library(tm)
+library(SnowballC)
+corpus2=Corpus(VectorSource(tweets$Tweet))
+corpus2[[1]]
+corpus2=tm_map(corpus2,content_transformer(tolower))
+
+corpus2=tm_map(corpus2,PlainTextDocument)
+corpus2=tm_map(corpus2,removePunctuation)
+corpus2=tm_map(corpus2,removeWords,c("apple",stopwords("english")))
+corpus2=tm_map(corpus2,stemDocument)
+corpus2[[1]]
+```
+##making a sparse matrix
+```{r}
+frequencies=DocumentTermMatrix(corpus2)
+frequencies
+
+```
+```{r}
+corpus2[[1]]$content
+```
+```{r}
+findFreqTerms(frequencies,lowfreq = 20)
+```
+##removing sparse terms
+```{r}
+sparse=removeSparseTerms(frequencies,0.995)
+sparse
+
+```
+## making a dataframe from the sparse 
+```{r}
+tweetssparse=as.data.frame(as.matrix(sparse))
+
+```
+## R struggles with names starting with a number , so removing aand processing data
+## use this every time convering text to analytics
+```{r}
+colnames(tweetssparse)=make.names(colnames(tweetssparse))
+tweetssparse$negative=tweets$negative
+library(caTools)
+set.seed(123)
+split=sample.split(tweetssparse$negative,SplitRatio = 0.70)
+train=subset(tweetssparse,split==TRUE)
+test=subset(tweetssparse,split==FALSE)
+```
+## building a cart model for predicting sentiments
+```{r}
+library(rpart)
+library(rpart.plot)
+tweetcart=rpart(negative~.,data=train,method="class")
+prp(tweetcart)
+```
+## testing performance
+```{r}
+predictcart=predict(tweetcart,newdata = test,type="class")
+table(test$negative,predictcart)
+```
+
+```{r}
+(294+18)/(nrow(test))
+```
+## making a random forest
+```{r}
+library(randomForest)
+set.seed(123)
+tweetrf=randomForest(negative~.,data=train)
+```
+```{r}
+library(randomForest)
+predictRF=predict(tweetrf,newdata=test)
+table(test$negative,predictRF)
+```
+```{r}
+(294+21)/nrow(test)
+```
+
